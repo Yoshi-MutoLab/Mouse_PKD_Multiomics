@@ -1,0 +1,67 @@
+library(Seurat)
+library(Signac)
+library(GenomeInfoDb)
+library(harmony)
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(harmony)
+library(future)
+set.seed(1234)
+
+#PKDaggr: aggregated data
+DefaultAssay(PKDaggr) <- "ATAC"
+
+peaks <- CallPeaks(
+  object = PKDaggr,
+  macs2.path = "/path/to/macs2_env/bin/macs2")
+
+peaks <- keepStandardChromosomes(peaks, pruning.mode = "coarse")
+peaks <- subsetByOverlaps(x = peaks, ranges = blacklist_mm10, invert = TRUE)
+
+# quantify counts in each peak
+macs2_counts <- FeatureMatrix(
+  fragments = Fragments(PKDaggr),
+  features = peaks,
+  cells = colnames(PKDaggr))
+
+# create a new assay using the MACS2 peak set and add it to the Seurat object
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+PKDaggr[["peaks"]] <- CreateChromatinAssay(counts = macs2_counts, fragments = Fragments(PKDaggr), annotation = annotation)
+DefaultAssay(PKDaggr) <- "peaks"
+PKDaggr@assays[["ATAC"]] <- NULL
+
+#chromvar motif activity on peaks
+library(JASPAR2022)
+library(TFBSTools)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(patchwork)
+set.seed(1234)
+#sessionInfo()
+
+gr <- granges(PKDaggr)
+seq_keep <- seqnames(gr) %in% seqnames(BSgenome.Mmusculus.UCSC.mm10) 
+seq_keep <- as.vector(seq_keep)
+feat.keep <- GRangesToString(grange = gr[seq_keep])
+atac_chrom <- subset(PKDaggr, features = feat.keep)
+
+pfm <- getMatrixSet(
+  x = JASPAR2022,
+  opts = list(collection = "CORE", tax_group = 'vertebrates', all_versions = F)
+)
+
+# add motif information
+atac_chrom <- AddMotifs(
+  object = atac_chrom,
+  genome = BSgenome.Mmusculus.UCSC.mm10,
+  pfm = pfm
+)
+
+atac_chrom <- RunChromVAR(
+  object = atac_chrom,
+  genome = BSgenome.Mmusculus.UCSC.mm10
+)
+
+PKDaggr@assays[["chromvar"]] <- atac_chrom@assays[["chromvar"]]
+saveRDS(PKDaggr, "PKDaggr.rds")
