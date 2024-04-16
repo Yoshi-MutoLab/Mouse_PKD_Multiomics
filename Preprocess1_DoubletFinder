@@ -1,0 +1,150 @@
+library(Signac) 
+library(Seurat) 
+library(GenomeInfoDb)
+library(harmony) 
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(harmony)
+library(BuenColors)
+library(DoubletFinder)
+set.seed(1234)
+sessionInfo()
+
+#pkd1-3: p130_pkd1-3
+#pkd4-6: p130_cont1-3
+#pkd7-9: p100_pkd1-3
+#pkd10-12: p100_cont1-3
+#pkd13-14: p66_pkd1-2
+#pkd15-16: p66_cont1-2
+# load the RNA and ATAC data
+count1 <- Read10X_h5("/path/to/pkd1_output_filtered.h5")
+count2 <- Read10X_h5("/path/to/pkd2_output_filtered.h5")
+count3 <- Read10X_h5("/path/to/pkd3_output_filtered.h5")
+count4 <- Read10X_h5("/path/to/pkd4_output_filtered.h5")
+count5 <- Read10X_h5("/path/to/pkd5_output_filtered.h5")
+count6 <- Read10X_h5("/path/to/pkd6_output_filtered.h5")
+count7 <- Read10X_h5("/path/to/pkd7_output_filtered.h5")
+count8 <- Read10X_h5("/path/to/pkd8_output_filtered.h5")
+count9 <- Read10X_h5("/path/to/pkd9_output_filtered.h5")
+count10 <- Read10X_h5("/path/to/pkd10_output_filtered.h5")
+count11 <- Read10X_h5("/path/to/pkd11_output_filtered.h5")
+count12 <- Read10X_h5("/path/to/pkd12_output_filtered.h5")
+count13 <- Read10X_h5("/path/to/pkd13_output_filtered.h5")
+count14 <- Read10X_h5("/path/to/pkd14_output_filtered.h5")
+count15 <- Read10X_h5("/path/to/pkd15_output_filtered.h5")
+count16 <- Read10X_h5("/path/to/pkd16_output_filtered.h5")
+
+# create a Seurat object containing the RNA adata
+P130_pkd1 <- CreateSeuratObject(counts = count1, assay = "RNA")
+P130_pkd2 <- CreateSeuratObject(counts = count2, assay = "RNA")
+P130_pkd3 <- CreateSeuratObject(counts = count3, assay = "RNA")
+P130_cont1 <- CreateSeuratObject(counts = count4, assay = "RNA")
+P130_cont2 <- CreateSeuratObject(counts = count5, assay = "RNA")
+P130_cont3 <- CreateSeuratObject(counts = count6, assay = "RNA")
+P100_pkd1 <- CreateSeuratObject(counts = count7, assay = "RNA")
+P100_pkd2 <- CreateSeuratObject(counts = count8, assay = "RNA")
+P100_pkd3 <- CreateSeuratObject(counts = count9, assay = "RNA")
+P100_cont1 <- CreateSeuratObject(counts = count10, assay = "RNA")
+P100_cont2 <- CreateSeuratObject(counts = count11, assay = "RNA")
+P100_cont3 <- CreateSeuratObject(counts = count12, assay = "RNA")
+P66_pkd1 <- CreateSeuratObject(counts = count13, assay = "RNA")
+P66_pkd2 <- CreateSeuratObject(counts = count14, assay = "RNA")
+P66_cont1 <- CreateSeuratObject(counts = count15, assay = "RNA")
+P66_cont2 <- CreateSeuratObject(counts = count16, assay = "RNA")
+
+#set the QC parameters (mitochondrial reads)
+P130_cont1 <- PercentageFeatureSet(P130_cont1, pattern = "^mt-", col.name = "percent.mt")
+P130_cont2 <- PercentageFeatureSet(P130_cont2, pattern = "^mt-", col.name = "percent.mt")
+P130_cont3 <- PercentageFeatureSet(P130_cont3, pattern = "^mt-", col.name = "percent.mt")
+P130_pkd1 <- PercentageFeatureSet(P130_pkd1, pattern = "^mt-", col.name = "percent.mt")
+P130_pkd2 <- PercentageFeatureSet(P130_pkd2, pattern = "^mt-", col.name = "percent.mt")
+P130_pkd3 <- PercentageFeatureSet(P130_pkd3, pattern = "^mt-", col.name = "percent.mt")
+P100_cont1 <- PercentageFeatureSet(P100_cont1, pattern = "^mt-", col.name = "percent.mt")
+P100_cont2 <- PercentageFeatureSet(P100_cont2, pattern = "^mt-", col.name = "percent.mt")
+P100_cont3 <- PercentageFeatureSet(P100_cont3, pattern = "^mt-", col.name = "percent.mt")
+P100_pkd1 <- PercentageFeatureSet(P100_pkd1, pattern = "^mt-", col.name = "percent.mt")
+P100_pkd2 <- PercentageFeatureSet(P100_pkd2, pattern = "^mt-", col.name = "percent.mt")
+P100_pkd3 <- PercentageFeatureSet(P100_pkd3, pattern = "^mt-", col.name = "percent.mt")
+P66_cont1 <- PercentageFeatureSet(P66_cont1, pattern = "^mt-", col.name = "percent.mt")
+P66_cont2 <- PercentageFeatureSet(P66_cont2, pattern = "^mt-", col.name = "percent.mt")
+P66_pkd1 <- PercentageFeatureSet(P66_pkd1, pattern = "^mt-", col.name = "percent.mt")
+P66_pkd2 <- PercentageFeatureSet(P66_pkd2, pattern = "^mt-", col.name = "percent.mt")
+
+
+#QC check
+VlnPlot(P130_cont1,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P130_cont2,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P130_cont3,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P130_pkd1,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P130_pkd2,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P130_pkd3,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P100_cont1,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P100_cont2,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P100_cont3,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P100_pkd1,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P100_pkd2,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P100_pkd3,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P66_cont1,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P66_cont2,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P66_pkd1,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+VlnPlot(P66_pkd2,c("nCount_RNA","nFeature_RNA","percent.mt"),pt.size = 0.1,ncol=3)
+
+P130_cont1 <- subset(x = P130_cont1, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                  nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P130_cont2 <- subset(x = P130_cont2, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                  nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P130_cont3 <- subset(x = P130_cont3, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                  nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P130_pkd1 <- subset(x = P130_pkd1, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                  nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P130_pkd2 <- subset(x = P130_pkd2, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                 nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P130_pkd3 <- subset(x = P130_pkd3, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                 nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P100_cont1 <- subset(x = P100_cont1, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                       nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P100_cont2 <- subset(x = P100_cont2, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                       nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P100_cont3 <- subset(x = P100_cont3, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                       nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P100_pkd1 <- subset(x = P100_pkd1, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                      nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P100_pkd2 <- subset(x = P100_pkd2, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                      nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P100_pkd3 <- subset(x = P100_pkd3, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                      nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P66_cont1 <- subset(x = P66_cont1, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                       nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P66_cont2 <- subset(x = P66_cont2, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                       nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P66_pkd1 <- subset(x = P66_pkd1, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                      nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+P66_pkd2 <- subset(x = P66_pkd2, subset = nCount_RNA > 1000 & nCount_RNA < 15000 &
+                      nFeature_RNA > 500 & nFeature_RNA < 4000 & percent.mt < 2 ) 
+
+# doubletfinder (example: P130_cont1) - apply to each of all the samples
+DefaultAssay(P130_cont1) <- "RNA"
+P130_cont1 <- SCTransform(P130_cont1, vars.to.regress = "nCount_RNA")
+P130_cont1 <- RunPCA(P130_cont1)
+P130_cont1 <- RunUMAP(P130_cont1, dims = 1:50)
+
+## pK Identification (no ground-truth)
+sweep.res.list <- paramSweep_v3(P130_cont1, PCs = 1:50, sct = TRUE)
+sweep.stats <- summarizeSweep(sweep.res.list, GT = FALSE)
+bcmvn <- find.pK(sweep.stats)
+## pK= 0.005
+
+doublet_rate<-0.018+8.4e-06*ncol(P130_cont1)  ##This function is based on the data from the Demuxlet paper
+ndoublets<-doublet_rate*ncol(P130_cont1)
+P130_cont1 <- doubletFinder_v3(P130_cont1, PCs = 1:50, pN = 0.25, pK = 0.005,
+                                         nExp = round(doublet_rate*length(P130_cont1@active.ident)), 
+                                         reuse.pANN = FALSE, sct = TRUE)
+
+## Add detected doublet to metadata of Seurat object
+doubletdata <- P130_cont1@meta.data[["DF.classifications_0.25_0.005_905"]]
+names(doubletdata) <- rownames(P130_cont1@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+P130_cont1 <- AddMetaData(P130_cont1,doubletdata)
+saveRDS(P130_cont1,"P130_cont1.rds")
