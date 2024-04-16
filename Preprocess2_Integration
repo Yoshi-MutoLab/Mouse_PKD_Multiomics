@@ -1,0 +1,41 @@
+library(Seurat)
+library(Signac)
+library(GenomeInfoDb)
+library(harmony)
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(harmony)
+library(BuenColors)
+library(DoubletFinder)
+set.seed(1234)
+
+# extract gene annotations from EnsDb
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+
+#example: P130_cont1 - apply to each of all samples
+P130_cont1 <- readRDS("P130_cont1.rds")
+P130_cont1@meta.data[["orig.ident"]] <- "P130_cont1"
+fragpath1 <- "/path/to/P130_cont1/atac_fragments.tsv.gz"
+
+# create ATAC assay and add it to the object
+P130_cont1[["ATAC"]] <- subset(CreateChromatinAssay(counts = counts4$Peaks, min.features = -1, sep = c(":", "-"), fragments = fragpath4, annotation = annotations),cells = P130_cont1@assays[["RNA"]]@counts@Dimnames[[2]])
+
+# Quality control - P130
+DefaultAssay(P130_cont1) <- "ATAC"
+P130_cont1 <- NucleosomeSignal(P130_cont1)
+P130_cont1 <- TSSEnrichment(P130_cont1)
+
+P130_cont1<- subset(P130_cont1, subset =  nCount_ATAC < 40000 & nCount_ATAC > 1000 &
+                      nucleosome_signal < 2 &TSS.enrichment > 1) 
+
+Idents(P130_cont1) <- "doubletdata"
+P130_cont1 <- subset(P130_cont1,idents = "Singlet")
+
+#After individual preprocessing, merge all together
+PKDaggr <- merge(P130_cont1, y = c(P130_cont2,P130_cont3,P130_pkd1,P130_pkd2,P130_pkd3,
+                                   P100_cont1,P100_cont2,P100_cont3,P100_pkd1,P100_pkd2,P100_pkd3,
+                                   P66_cont1,P66_cont2,P66_pkd1,P66_pkd2))
