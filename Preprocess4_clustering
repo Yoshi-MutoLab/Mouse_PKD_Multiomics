@@ -1,0 +1,82 @@
+library(Seurat)
+library(Signac)
+library(GenomeInfoDb)
+library(harmony) 
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(harmony)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(patchwork)
+library(BuenColors)
+library(plot1cell)
+set.seed(1234)
+
+PKDaggr <- readRDS("PKDaggr.rds")
+
+Idents(PKDaggr) <- "orig.ident"
+new.cluster.ids <- c("P130-cont","P130-cont","P130-cont","P130-pkd","P130-pkd","P130-pkd",
+                     "P100-cont","P100-cont","P100-cont","P100-pkd","P100-pkd","P100-pkd",
+                     "P66-cont","P66-cont","P66-pkd","P66-pkd")
+names(new.cluster.ids) <- levels(PKDaggr)
+PKDaggr <- RenameIdents(PKDaggr, new.cluster.ids)
+PKDaggr@meta.data[["disease"]] <- PKDaggr@active.ident
+
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+library(biomaRt)
+human <- useMart("ensembl", dataset = "hsapiens_gene_ensembl", host = "https://dec2021.archive.ensembl.org/")
+mouse <- useMart("ensembl", dataset = "mmusculus_gene_ensembl", host = "https://dec2021.archive.ensembl.org/")
+converted_genelist = getLDS(attributes = "hgnc_symbol", filters = "hgnc_symbol", values = s.genes , 
+                            mart = human, attributesL = "mgi_symbol", martL = mouse, uniqueRows=T)
+s.genes <- converted_genelist$MGI.symbol
+
+converted_genelist = getLDS(attributes = "hgnc_symbol", filters = "hgnc_symbol", values = g2m.genes , 
+                            mart = human, attributesL = "mgi_symbol", martL = mouse, uniqueRows=T)
+g2m.genes <- converted_genelist$MGI.symbol
+PKDaggr <- CellCycleScoring(PKDaggr, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
+## data processing w/ Harmony
+DefaultAssay(PKDaggr) <- "RNA"
+PKDaggr <- SCTransform(PKDaggr, vars.to.regress = c("percent.mt", "nCount_RNA","S.Score", "G2M.Score"))
+PKDaggr <- RunPCA(PKDaggr)
+PKDaggr <- RunHarmony(PKDaggr, "orig.ident", assay = "SCT", plot_convergence = TRUE, max.iter.harmony = 15)
+PKDaggr <- RunUMAP(PKDaggr, reduction = "harmony", dims = 1:30, reduction.name = 'umap.rna', reduction.key = 'rnaUMAP_')
+PKDaggr <- FindNeighbors(object = PKDaggr, reduction = "harmony", dims = 2:30)
+PKDaggr <- FindClusters(object = PKDaggr, verbose = FALSE, algorithm = 3,resolution = 1)
+
+DefaultAssay(PKDaggr) <- "peaks"
+PKDaggr <- RunTFIDF(PKDaggr)
+PKDaggr <- FindTopFeatures(PKDaggr, min.cutoff = 'q0')
+PKDaggr <- RunSVD(PKDaggr)
+PKDaggr <- RunHarmony(PKDaggr, "orig.ident", assay.use = "peaks",
+                      plot_convergence = TRUE, reduction.save = "harmony_atac", max.iter.harmony = 15,
+                      reduction_use = "lsi", project.dim = FALSE)
+PKDaggr <- RunUMAP(PKDaggr, reduction = 'harmony_atac', dims = 2:40, reduction.name = "umap.atac")
+PKDaggr <- FindNeighbors(object = PKDaggr, reduction = "harmony_atac", dims = 2:30)
+PKDaggr <- FindClusters(object = PKDaggr, verbose = FALSE, algorithm = 3,resolution = 1)
+
+PKDaggr <- FindMultiModalNeighbors(
+  PKDaggr, reduction.list = list("harmony", "harmony_atac"), 
+  dims.list = list(1:30, 2:30)
+)
+PKDaggr <- RunUMAP(PKDaggr, nn.name = "weighted.nn", reduction.name = "umap.wnn", reduction.key = "wnnUMAP_")
+PKDaggr <- FindClusters(PKDaggr, graph.name = "wsnn", algorithm = 3, verbose = FALSE,resolution = 0.6)
+DimPlot(PKDaggr, reduction = "umap.wnn", label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+
+DefaultAssay(PKDaggr) <- "SCT"
+
+Idents(PKDaggr) <- "seurat_clusters"
+new.cluster.ids <- c("PTS1","PTS2","ENDO","TAL","PTS2","PTS1","PTS2","PTS3","TAL","PTS1","CNT",
+                     "DCT","PC1","ENDO","FIB","FRPTC_PEC","DCT","DTL1","PTS1","Myel","ICB",
+                     "ICA","PC2","TAL","ENDO","ATL","Tcell","DTL2","PTS1","URO","PODO",
+                     "Bcell","TAL","FAT")
+names(new.cluster.ids) <- levels(PKDaggr)
+PKDaggr <- RenameIdents(PKDaggr, new.cluster.ids)
+levels(PKDaggr) <- c("PTS1","PTS2","PTS3","FRPTC_PEC","DTL1","DTL2","ATL","TAL",
+                      "DCT","CNT","PC1","PC2","URO","ICA","ICB","PODO","ENDO",
+                     "FIB","Myel","Bcell","Tcell","FAT")
+PKDaggr@meta.data[["celltype"]] <- PKDaggr@active.ident
+
+saveRDS(PKDaggr, "/home/scratch/yoshi/PKD_mouse/PKDaggr.rds")
