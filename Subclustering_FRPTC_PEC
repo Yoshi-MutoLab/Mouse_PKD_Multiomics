@@ -1,0 +1,44 @@
+library(Seurat)
+library(Signac)
+library(GenomeInfoDb)
+library(harmony)
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(harmony)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(patchwork)
+set.seed(1234)
+
+Idents(PKDaggr) <- "celltype"
+FRPTC_PEC <- subset(PKDaggr,idents = "FRPTC_PEC")
+FRPTC_PEC <- RunPCA(FRPTC_PEC)
+FRPTC_PEC <- RunUMAP(FRPTC_PEC, reduction = "pca", dims = 1:20, reduction.name = 'umap.frptc')
+FRPTC_PEC <- FindNeighbors(object = FRPTC_PEC, reduction = "pca", dims = 2:20)
+FRPTC_PEC <- FindClusters(object = FRPTC_PEC, verbose = FALSE, algorithm = 3,resolution = 0.3)
+DimPlot(FRPTC_PEC,reduction = 'umap.frptc',label = T)
+DimPlot(FRPTC_PEC,reduction = 'umap.frptc',label = T,split.by = "disease")
+
+DefaultAssay(FRPTC_PEC) <- "peaks"
+FRPTC_PEC <- RunTFIDF(FRPTC_PEC)
+FRPTC_PEC <- FindTopFeatures(FRPTC_PEC, min.cutoff = 'q0')
+FRPTC_PEC <- RunSVD(FRPTC_PEC)
+FRPTC_PEC <- RunUMAP(FRPTC_PEC, reduction = 'lsi', dims = 2:20, reduction.name = "umap.fratac")
+FRPTC_PEC <- FindNeighbors(object = FRPTC_PEC, reduction = "lsi", dims = 2:20)
+FRPTC_PEC <- FindClusters(object = FRPTC_PEC, verbose = FALSE, algorithm = 3,resolution = 0.3)
+DimPlot(FRPTC_PEC,reduction = 'umap.fratac',label = T)
+FRPTC_PEC <- FindMultiModalNeighbors(FRPTC_PEC, reduction.list = list("pca", "lsi"), 
+                                     dims.list = list(1:20, 2:20)
+)
+FRPTC_PEC <- RunUMAP(FRPTC_PEC, nn.name = "weighted.nn", reduction.name = "umap.frwnn", reduction.key = "wnnUMAP_")
+FRPTC_PEC <- FindClusters(FRPTC_PEC, graph.name = "wsnn", algorithm = 3, verbose = FALSE,resolution = 0.3)
+DimPlot(FRPTC_PEC, reduction = "umap.frwnn", label = TRUE, repel = TRUE, label.size = 3,group.by = "seurat_clusters") + NoLegend()
+
+Idents(FRPTC_PEC) <- "seurat_clusters"
+new.cluster.ids <- c("FRPTC2","Transitional-PTC1","FRPTC1","FRPTC3","PEC","Transitional-PTC2")
+names(new.cluster.ids) <- levels(FRPTC_PEC)
+FRPTC_PEC <- RenameIdents(FRPTC_PEC, new.cluster.ids)
+levels(FRPTC_PEC) <- c("PEC","Transitional-PTC1","Transitional-PTC2","FRPTC1","FRPTC2","FRPTC3")
+FRPTC_PEC@meta.data[["subtype"]] <- FRPTC_PEC@active.ident
+DefaultAssay(FRPTC_PEC) <- "SCT"
