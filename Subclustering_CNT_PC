@@ -1,0 +1,79 @@
+library(Seurat)
+library(Signac)
+library(GenomeInfoDb)
+library(harmony) 
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(harmony)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(patchwork)
+set.seed(1234)
+
+PKDaggr <- readRDS("PKDaggr.rds")
+CNT_PC <- subset(PKDaggr,idents = c("CNT","PC1","PC2","URO"))
+CNT_PC <- SCTransform(CNT_PC, vars.to.regress = c("percent.mt", "nCount_RNA","S.Score", "G2M.Score"))
+CNT_PC <- RunPCA(CNT_PC)
+CNT_PC <- RunUMAP(CNT_PC, reduction = "pca", dims = 1:20, reduction.name = 'umap.CNT_PC')
+CNT_PC <- FindNeighbors(object = CNT_PC, reduction = "pca", dims = 1:20)
+CNT_PC <- FindClusters(object = CNT_PC, verbose = FALSE, algorithm = 3,resolution = 0.3)
+DimPlot(CNT_PC,reduction = 'umap.CNT_PC',label = T)
+
+DefaultAssay(CNT_PC) <- "peaks"
+CNT_PC <- RunTFIDF(CNT_PC)
+CNT_PC <- FindTopFeatures(CNT_PC, min.cutoff = 'q0')
+CNT_PC <- RunSVD(CNT_PC)
+CNT_PC <- RunUMAP(CNT_PC, reduction = 'lsi', dims = 2:20, reduction.name = "umap.PCatac")
+CNT_PC <- FindNeighbors(object = CNT_PC, reduction = "lsi", dims = 2:20)
+CNT_PC <- FindClusters(object = CNT_PC, verbose = FALSE, algorithm = 3,resolution = 0.3)
+DimPlot(CNT_PC,reduction = 'umap.PCatac',label = T)
+
+CNT_PC <- FindMultiModalNeighbors(CNT_PC, reduction.list = list("pca", "lsi"), 
+                                     dims.list = list(1:20, 2:20)
+)
+CNT_PC <- RunUMAP(CNT_PC, nn.name = "weighted.nn", reduction.name = "umap.PCwnn", reduction.key = "wnnUMAP_")
+CNT_PC <- FindClusters(CNT_PC, graph.name = "wsnn", algorithm = 3, verbose = FALSE,resolution = 0.3)
+
+Idents(CNT_PC) <- "seurat_clusters"
+new.cluster.ids <- c("CNT1","cPC1","mPC","cPC2","CNT2","LowQC1","LowQC2","LowQC3","URO","LowQC4","CNT3","LowQC5","LowQC6")
+#LowQC clusters express other celltype markers (eg PTC) and multiples. See the manuscript and Supplementary Figs.
+names(new.cluster.ids) <- levels(CNT_PC)
+CNT_PC <- RenameIdents(CNT_PC, new.cluster.ids)
+levels(CNT_PC) <- c("CNT1","CNT2","CNT3","cPC1","cPC2","mPC","URO","LowQC1","LowQC2","LowQC3","LowQC4","LowQC5","LowQC6")
+CNT_PC@meta.data[["subtype"]] <- CNT_PC@active.ident
+
+CNT_PC <- subset(CNT_PC,idents = c("CNT1","CNT2","CNT3","cPC1","cPC2","mPC","URO")) #Remove multiplets
+CNT_PC <- SCTransform(CNT_PC, vars.to.regress = c("percent.mt", "nCount_RNA","S.Score", "G2M.Score"))
+CNT_PC <- RunPCA(CNT_PC)
+CNT_PC <- RunUMAP(CNT_PC, reduction = "pca", dims = 1:20, reduction.name = 'umap.CNT_PC')
+CNT_PC <- FindNeighbors(object = CNT_PC, reduction = "pca", dims = 1:20)
+CNT_PC <- FindClusters(object = CNT_PC, verbose = FALSE, algorithm = 3,resolution = 0.3)
+DimPlot(CNT_PC,reduction = 'umap.CNT_PC',label = T)
+
+DefaultAssay(CNT_PC) <- "peaks"
+CNT_PC <- RunTFIDF(CNT_PC)
+CNT_PC <- FindTopFeatures(CNT_PC, min.cutoff = 'q0')
+CNT_PC <- RunSVD(CNT_PC)
+CNT_PC <- RunUMAP(CNT_PC, reduction = 'lsi', dims = 2:20, reduction.name = "umap.PCatac")
+CNT_PC <- FindNeighbors(object = CNT_PC, reduction = "lsi", dims = 2:20)
+CNT_PC <- FindClusters(object = CNT_PC, verbose = FALSE, algorithm = 3,resolution = 0.3)
+DimPlot(CNT_PC,reduction = 'umap.PCatac',label = T)
+
+CNT_PC <- FindMultiModalNeighbors(CNT_PC, reduction.list = list("pca", "lsi"), 
+                                  dims.list = list(1:20, 2:20)
+)
+CNT_PC <- RunUMAP(CNT_PC, nn.name = "weighted.nn", reduction.name = "umap.PCwnn2", reduction.key = "wnnUMAP_")
+CNT_PC <- FindClusters(CNT_PC, graph.name = "wsnn", algorithm = 3, verbose = FALSE,resolution = 0.3)
+DefaultAssay(CNT_PC) <- "SCT"
+
+Idents(CNT_PC) <- "seurat_clusters"
+new.cluster.ids <- c("CNT1","cPC1","cPC2","CNT2","mPC1","CNT3","mPC2","URO","LowQC")
+#LowQC expresses PTC markers, remaining multiplets unremoved at the 1st round subclusutering
+names(new.cluster.ids) <- levels(CNT_PC)
+CNT_PC <- RenameIdents(CNT_PC, new.cluster.ids)
+levels(CNT_PC) <- c("CNT1","CNT2","CNT3","cPC1","cPC2","mPC1","mPC2","URO","LowQC")
+CNT_PC@meta.data[["subtype2"]] <- CNT_PC@active.ident
+
+CNT_PC <- subset(CNT_PC,idents = "LowQC",invert=T) #Remove the remaining low-QC/doublet cells
+DefaultAssay(CNT_PC) <- "SCT"
