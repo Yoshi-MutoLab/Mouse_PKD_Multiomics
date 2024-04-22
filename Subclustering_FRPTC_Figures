@@ -1,0 +1,420 @@
+library(Seurat) 
+library(Signac)
+library(GenomeInfoDb)
+library(harmony) 
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(harmony)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(patchwork)
+library(BuenColors)
+set.seed(1234)
+
+Fig3A_1 <- DimPlot(PKDaggr,reduction = "umap.wnn",cols = c("#00BFC4","#F8766D")) #550x450
+Fig3A_2 <- DimPlot(FRPTC_PEC, reduction = "umap.frwnn", label = TRUE, repel = TRUE, label.size = 3,group.by = "seurat_clusters") + NoLegend()
+#480x470
+
+meta <- PKDaggr@meta.data
+meta <- meta[!meta$celltype %in% "FRPTC_PEC", ]
+meta <- meta[,c(1,63)]
+colnames(meta)[2] <- "subtype" 
+meta <- rbind(meta, FRPTC_PEC@meta.data[,c(1,68)])
+PKDaggr <- AddMetaData(PKDaggr,meta)
+Idents(PKDaggr) <- "subtype"
+
+PTC <- subset(PKDaggr,idents = c("PEC","Trans-PTC","FRPTC1","FRPTC2","FRPTC3","PTS1","PTS2","PTS3"))
+levels(PTC) <- c("PTS1","PTS2","PTS3","Trans-PTC","FRPTC1","FRPTC2","FRPTC3","PEC")
+
+DefaultAssay(PTC) <- "SCT"
+features <- c("Slc5a12","Slc34a1","Cyp4b1","Rnf24","Lrp2","Stat3","Parp14",
+              "Vcam1","Havcr1","Nrg1","Cftr","Spp1","Sema5a","Cdh6","Rbms3","Erbb4","Tpt1","Kcnh7","S100a6","Ncam1","Robo1")
+levels(PTC) <- rev(levels(PTC))
+Fig3B <- DotPlot(PTC, features = features, cols = c("lightyellow","royalblue")) +
+  RotatedAxis() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #820x450
+levels(PTC) <- rev(levels(PTC))
+
+Fig3C_1 <- FeaturePlot(FRPTC_PEC,"Vcam1",reduction = "umap.frwnn") #450x400
+
+Fig3D_1 <- FeaturePlot(FRPTC_PEC,"Cftr",reduction = "umap.frwnn") #450x400
+Fig3D_2 <- FeaturePlot(PKDaggr,"Cftr",reduction = "umap.wnn")
+
+DefaultAssay(PTC) <-"peaks"
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+Annotation(PTC) <- annotations
+Fig3C_2<- CoveragePlot(PTC,"chr3-116127500-116132500",annotation = T,peaks = T) #300x400
+Fig3D_3<- CoveragePlot(PTC,"chr6-18168000-18173000",annotation = T,peaks = T) #300x400
+
+FRPTC_PECpercentage <- read.csv("FRPTC_percentage_freq.csv")
+#convert data frame from a "wide" format to a "long" format
+library(reshape2)
+lm = melt(FRPTC_PECpercentage, id = "disease")
+
+ggplotColours <- function(n = 6, h = c(0, 360) + 15){
+  if ((diff(h) %% 360) < 1) h[2] <- h[2] - 360/n
+  hcl(h = (seq(h[1], h[2], length = n)), c = 100, l = 65)
+}
+colours <- ggplotColours(n=4)
+colours <- colours[c(4,1,2,3)]
+
+library(ggplot2)
+Fig3H_1  <-  ggplot(lm, aes(x = disease, fill = variable, y = value)) + 
+  geom_bar(stat = "identity", colour = "black")  + 
+  scale_y_continuous(limits = c(0, 0.11),expand = c(0, 0)) +theme(
+    panel.background = element_rect(fill='transparent'))  + 
+  scale_fill_manual(values = colours) #500x450
+
+FRPTC <- subset(FRPTC_PEC,idents = c("Trans-PTC","FRPTC1","FRPTC2","FRPTC3"))
+Idents(FRPTC) <- "disease"
+FRPTC <- subset(FRPTC,idents = c("P66-cont","P66-pkd","P100-pkd","P130-pkd"))
+levels(FRPTC) <- c("P66-cont","P66-pkd","P100-pkd","P130-pkd")
+FRPTC@meta.data$disease <- FRPTC@active.ident
+Idents(FRPTC) <- "subtype"
+levels(FRPTC) <- levels(FRPTC)[c(3,4,1,2)]
+Fig3H_2 <- DimPlot(FRPTC, reduction = "umap.frwnn", split.by = "disease") + NoLegend()
+#350x650
+
+#Label transfer / Subtype prediction
+library(biomaRt)
+library(Matrix)
+
+PTC3 <- readRDS("PTC3.rds") #Human ADPKD+control PTC (Nat Commun.2022 Oct 30;13(1):6497)
+Idents(PTC3) <- "disease"
+PTC3 <- subset(PTC3, idents = "PKD")
+
+human_gene <- rownames(PTC3)
+human <- useMart("ensembl", dataset = "hsapiens_gene_ensembl", host = "https://dec2021.archive.ensembl.org/")
+mouse <- useMart("ensembl", dataset = "mmusculus_gene_ensembl", host = "https://dec2021.archive.ensembl.org/")
+
+converted_genelist = getLDS(attributes = c("hgnc_symbol"), 
+                            filters = "hgnc_symbol", 
+                            values = human_gene , 
+                            mart = human, 
+                            attributesL = c("mgi_symbol"), 
+                            martL = mouse, uniqueRows=T)
+
+converted_genelist <- converted_genelist %>% distinct(MGI.symbol,.keep_all=TRUE)
+
+FRPTC <- subset(FRPTC_PEC,idents = c("Trans-PTC","PEC"),invert=T)
+Idents(FRPTC) <- "disease"
+FRPTC <- subset(FRPTC,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+FRPTC_count <- FRPTC@assays[["RNA"]]@counts
+
+PTC3_count <- as.data.frame(PTC3@assays[["RNA"]]@counts)
+PTC3_count$HGNC.symbol <- rownames(PTC3_count)
+PTC3_count <-  merge(PTC3_count,converted_genelist,by = "HGNC.symbol")
+rownames(PTC3_count) <- PTC3_count$MGI.symbol
+PTC3_count <- PTC3_count[,2:10657]
+
+PTC3 <- CreateSeuratObject(counts = PTC3_count)
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+converted_genelist2 = getLDS(attributes = "hgnc_symbol", filters = "hgnc_symbol", values = s.genes , 
+                             mart = human, attributesL = "mgi_symbol", martL = mouse, uniqueRows=T)
+s.genes <- converted_genelist2$MGI.symbol
+converted_genelist3 = getLDS(attributes = "hgnc_symbol", filters = "hgnc_symbol", values = g2m.genes , 
+                             mart = human, attributesL = "mgi_symbol", martL = mouse, uniqueRows=T)
+g2m.genes <- converted_genelist3$MGI.symbol
+PTC3 <- CellCycleScoring(PTC3, s.features = s.genes, g2m.features = g2m.genes)
+PTC3 <- PercentageFeatureSet(PTC3, pattern = "^mt-", col.name = "percent.mt")
+PTC3 <- SCTransform(PTC3, vars.to.regress = c("percent.mt", "nCount_RNA","S.Score", "G2M.Score"))
+PTC3 <- RunPCA(PTC3)
+
+FRPTC <- SCTransform(FRPTC, vars.to.regress = c("percent.mt", "nCount_RNA","S.Score", "G2M.Score"))
+FRPTC <- RunPCA(FRPTC)
+
+PT.anchors <- FindTransferAnchors(
+  reference = FRPTC, query = PTC3, dims = 1:30,reduction = "cca",
+  reference.assay = 'SCT',
+  query.assay = 'SCT')
+
+predictions <- TransferData(anchorset = PT.anchors, refdata = FRPTC$subtype, dims = 1:30,
+                            weight.reduction = "cca")
+PTC3 <- readRDS("~/PTC3.rds")
+Idents(PTC3) <- "disease"
+PTC3 <- subset(PTC3, idents = "PKD")
+
+PTC3 <- AddMetaData(PTC3,predictions)
+Idents(PTC3) <- "subtype2"
+PT1 <- subset(PTC3,idents = "PT1")
+PT2 <- subset(PTC3,idents = "PT2")
+PT3 <- subset(PTC3,idents = "PT3")
+PT4 <- subset(PTC3,idents = "PT4")
+test1 <- as.data.frame(table(PT1@meta.data[["predicted.id"]]))
+colnames(test1) <- c("celltype","PT1")
+test2 <- as.data.frame(table(PT2@meta.data[["predicted.id"]]))
+colnames(test2) <- c("celltype","PT2")
+test3 <- as.data.frame(table(PT3@meta.data[["predicted.id"]]))
+colnames(test3) <- c("celltype","PT3")
+test4 <- as.data.frame(table(PT4@meta.data[["predicted.id"]]))
+colnames(test4) <- c("celltype","PT4")
+
+test <- cbind(test1[,2],test2[,2],test3[,2],test4[,2])
+rownames(test) <- test1[,1]
+colnames(test) <- c("PT1","PT2","PT3","PT4")
+#test <-test[c(4,1,2,3),]
+Fig3G <- pheatmap::pheatmap(test,scale = "column",cluster_rows = F,cluster_cols = F,border_color = "black") #420x280
+
+#P66 vs P100 vs P130
+FRPTC <- subset(FRPTC_PEC,idents = c("FRPTC1","FRPTC2","FRPTC3"))
+Idents(FRPTC) <- "disease"
+FRPTC <- subset(FRPTC,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+levels(FRPTC) <- c("P66-pkd","P100-pkd","P130-pkd")
+marker_FRPTC <- FindAllMarkers(FRPTC,only.pos = T)
+write.csv(marker_FRPTC,"~/PKD_mouse/fig3_final/marker_FRPTC.csv")
+
+FRPTC1 <- subset(FRPTC_PEC,idents = "FRPTC1")
+Idents(FRPTC1) <- "disease"
+FRPTC1 <- subset(FRPTC1,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+levels(FRPTC1) <- c("P66-pkd","P100-pkd","P130-pkd")
+
+features1 <- c("Slc25a5","Atp1a1","Gm42418","Kap",
+               "Cyb5a","Pkhd1","Cp","Spp1","Cftr","Rhobtb1")
+
+levels(FRPTC1) <- rev(levels(FRPTC1))
+Fig3I_1 <- DotPlot(FRPTC1, features = features1, cols = c("lightyellow","royalblue")) +
+  RotatedAxis() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #640x360
+levels(FRPTC1) <- rev(levels(FRPTC1))
+
+FRPTC2 <- subset(FRPTC_PEC,idents = "FRPTC2")
+Idents(FRPTC2) <- "disease"
+FRPTC2 <- subset(FRPTC2,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+levels(FRPTC2) <- c("P66-pkd","P100-pkd","P130-pkd")
+
+features2 <- c("Slc4a4","Igf1","S100g","Rbms3","Efemp1","Spp1","Erbb4","Cftr","Dcdc2a")
+
+levels(FRPTC2) <- rev(levels(FRPTC2))
+Fig3I_2 <- DotPlot(FRPTC2, features = features2, cols = c("lightyellow","royalblue")) +
+  RotatedAxis() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #620x360
+levels(FRPTC2) <- rev(levels(FRPTC2))
+
+#trajectory
+library(monocle3)
+library(cicero)
+Idents(FRPTC_PEC) <- "subtype"
+FRPTC <- subset(FRPTC_PEC,idents = "PEC", invert=T)
+DefaultAssay(FRPTC)  <- "peaks"
+count_data <- GetAssayData(FRPTC, slot = "counts")
+summ <- summary(count_data)
+summ_frame <- data.frame(peak = rownames(count_data)[summ$i],
+                         cell.id = colnames(count_data)[summ$j],
+                         count = summ$x)
+
+# create cell data set object with cicero constructor
+input_cds <- make_atac_cds(summ_frame, binarize = F)
+meta <- FRPTC@meta.data
+meta$cells <- rownames(meta)
+metanames <- rownames(meta)
+meta <- merge(input_cds@colData,meta,by.x="cells", by.y="cells")
+rownames(meta) <- meta@listData[["cells"]]
+input_cds@colData <- meta
+
+input_cds <- detect_genes(input_cds)
+input_cds <- estimate_size_factors(input_cds)
+input_cds <- preprocess_cds(input_cds, method = "LSI",num_dim=30)
+input_cds <- align_cds(input_cds, alignment_group = "orig.ident",preprocess_method = "LSI")
+input_cds <- reduce_dimension(input_cds, 
+                              preprocess_method = "Aligned")
+input_cds <- cluster_cells(input_cds)
+input_cds <- learn_graph(input_cds,close_loop = T)
+input_cds <- order_cells(input_cds) #Choose the three most distant point from PT_KIM1 in PCT and PST for "start points" of the trajectories. 
+
+Fig4B_1 <-   plot_cells(input_cds,color_cells_by = "subtype",
+                        label_cell_groups=F,show_trajectory_graph=F,group_label_size=3.6,
+                        cell_size = 0.6) #png 470x360
+Fig4B_2 <-   plot_cells(input_cds,
+                        color_cells_by = "pseudotime",cell_size = 0.6,
+                        label_groups_by_cluster=FALSE,
+                        label_leaves=FALSE,
+                        label_branch_points=FALSE,
+                        label_roots=FALSE,
+                        label_cell_groups=T,show_trajectory_graph=T,group_label_size=3.6) #png 450x360
+
+
+#RNA pseudotime
+count_data <- GetAssayData(FRPTC, assay = "SCT",slot = "counts")
+gene_metadata <- as.data.frame(rownames(count_data))
+colnames(gene_metadata) <- "gene_short_name"
+rownames(gene_metadata) <- gene_metadata$gene_short_name
+cds <- new_cell_data_set(as(count_data, "sparseMatrix"),
+                         cell_metadata = FRPTC@meta.data,
+                         gene_metadata = gene_metadata)
+cds <- preprocess_cds(cds, method = "PCA",num_dim=30)
+cds = align_cds(cds, alignment_group = "orig.ident",preprocess_method = "PCA")
+cds = reduce_dimension(cds,preprocess_method = "Aligned")
+cds <- cluster_cells(cds)
+cds <- learn_graph(cds,use_partition = F,close_loop = T)
+cds <- order_cells(cds) 
+
+Fig4A_1 <-   plot_cells(cds,color_cells_by = "subtype",
+                        label_cell_groups=F,show_trajectory_graph=F,group_label_size=3.6,
+                        cell_size = 0.6) #png 470x360
+Fig4A_2 <-   plot_cells(cds,
+                        color_cells_by = "pseudotime",cell_size = 0.6,
+                        label_groups_by_cluster=FALSE,
+                        label_leaves=FALSE,
+                        label_branch_points=FALSE,
+                        label_roots=FALSE,
+                        label_cell_groups=T,show_trajectory_graph=T,group_label_size=3.6) #png 450x360
+
+#motif enrichment
+library(JASPAR2022)
+library(TFBSTools)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(patchwork)
+pfm <- getMatrixSet(
+  x = JASPAR2022,
+  opts = list(collection = "CORE", tax_group = 'vertebrates', all_versions = F)
+)
+
+DefaultAssay(PTC) <- "chromvar"
+PTC <- ScaleData(PTC)
+Idents(PTC) <- "subtype"
+PTC <- subset(PTC,idents = "PEC",invert=T)
+new.cluster.ids <- c("Norm-PTC","Norm-PTC","Norm-PTC","Trans-PTC","FRPTC1","FRPTC2","FRPTC3")
+names(new.cluster.ids) <- levels(PTC)
+PTC <- RenameIdents(PTC, new.cluster.ids)
+PTC@meta.data[["subtype2"]] <- PTC@active.ident
+Idents(PTC) <- "subtype2"
+
+motif_marker <- FindAllMarkers(
+  object = PTC,
+  only.pos = TRUE,
+  mean.fxn = rowMeans,
+  fc.name = "avg_diff"
+)
+
+motifLookup <- motif_marker$gene
+motifNames <- sapply(motifLookup, function(x) pfm@listData[[x]]@name)
+motif_marker$gene2<- motifNames
+
+motif_marker %>%
+  group_by(cluster) %>%
+  top_n(n = 5, wt = avg_diff) -> top5
+
+unique_tf.list <- unique(top5$gene)
+top5 <- top5[!duplicated(top5$gene),]
+
+PTC[['chromvar']]@scale.data <- PTC[['chromvar']]@data
+
+aver_chromvar <- AverageExpression(PTC, assays = "chromvar", features = unique_tf.list,slot = "scale.data")
+mat <- aver_chromvar[["chromvar"]]
+rownames(mat) <- paste0(top5$gene2," (",top5$gene,")")
+Fig4C <-  pheatmap::pheatmap(mat,scale = "row",cluster_cols=F,cluster_rows = F,show_rownames=T) #520x520
+Fig4D_1 <-  VlnPlot(PTC,"MA0107.1",pt.size = 0)+NoLegend() #420x360
+Fig4D_2 <-  VlnPlot(PTC,"MA0099.3",pt.size = 0)+NoLegend()
+Fig4D_3 <-  VlnPlot(PTC,"MA0808.1",pt.size = 0)+NoLegend()
+Fig4D_4 <-  VlnPlot(PTC,"MA0114.4",pt.size = 0)+NoLegend()
+
+
+######### vision #########
+
+PTC <- subset(PTC,idents = "PEC",invert=T)
+new.cluster.ids <- c("Norm-PTC","Norm-PTC","Norm-PTC","Trans-PTC","FRPTC1","FRPTC2","FRPTC3")
+names(new.cluster.ids) <- levels(PTC)
+PTC <- RenameIdents(PTC, new.cluster.ids)
+PTC@meta.data[["subtype2"]] <- PTC@active.ident
+Idents(PTC) <- "subtype2"
+PTC <- subset(PTC,downsample = 1000)
+
+library(VISION)
+signatures <- "mh.all.v2022.1.Mm.symbols.gmt"
+#signatures <- "m2.cp.reactome.v2022.1.Mm.symbols.gmt" 
+vision.obj <- Vision(PTC@assays[["SCT"]]@data, signatures = signatures)
+options(mc.cores=16)
+vision.obj <- analyze(vision.obj)
+
+sigScores <- getSignatureScores(vision.obj)
+sigScores <- as.data.frame(sigScores)
+
+PTC[['GSEA']] <- CreateAssayObject(counts = t(sigScores))
+DefaultAssay(PTC) <- "GSEA"
+PTC <- ScaleData(PTC)
+
+PTC_avg <- AverageExpression(PTC,assays = "GSEA")
+Fig4F <- pheatmap::pheatmap(PTC_avg[["GSEA"]],scale = "row", cluster_cols = F,cluster_rows = T, ) #650x720
+#720x650
+
+Fig4E_HIPPO <- VlnPlot(PTC,"REACTOME-SIGNALING-BY-HIPPO",pt.size = 0)+NoLegend() #480x360
+Fig4E_LAM <- VlnPlot(PTC,"REACTOME-LAMININ-INTERACTIONS",pt.size = 0)+NoLegend() #480x360
+Fig4E_ERBB4 <- VlnPlot(PTC,"REACTOME-PI3K-EVENTS-IN-ERBB4-SIGNALING",pt.size = 0)+NoLegend() #480x360
+
+
+
+PTC <- subset(PKDaggr,idents = c("PEC","Trans-PTC","FRPTC1","FRPTC2","FRPTC3","PTS1","PTS2","PTS3"))
+levels(PTC) <- c("PTS1","PTS2","PTS3","Trans-PTC","FRPTC1","FRPTC2","FRPTC3")
+new.cluster.ids <- c("PTS1","PTS2","PTS3","Trans-PTC","FRPTC","FRPTC","FRPTC")
+names(new.cluster.ids) <- levels(PTC)
+PTC <- RenameIdents(PTC, new.cluster.ids)
+PTC@meta.data[["subtype2"]] <- PTC@active.ident
+Idents(PTC) <- "disease"
+PTC <- subset(PTC,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+Idents(PTC) <- "subtype2"
+
+"chr12:12871973-12873059 (human) Lifted over to chr6-135040191-135040827 (remap base ratio 0.5)"
+
+DefaultAssay(PTC) <- "peaks"
+Fig7_Gprc5a_enh1 <- CoveragePlot(
+  object = PTC,
+  region = "chr6-135040191-135040827",
+  extend.upstream = 2000,
+  extend.downstream = 2000,
+  annotation = T,
+  peaks = T,
+) #300x550 
+
+####### CCAN ##########
+library(monocle3)
+library(cicero)
+Idents(FRPTC_PEC) <- "subtype"
+FRPTC <- subset(FRPTC_PEC,idents = "PEC",invert=T)
+Idents(FRPTC) <- "disease"
+FRPTC <- subset(FRPTC,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+
+DefaultAssay(FRPTC) <- "peaks"
+
+count_data <- GetAssayData(FRPTC, slot = "counts")
+summ <- summary(count_data)
+summ_frame <- data.frame(peak = rownames(count_data)[summ$i],
+                         cell.id = colnames(count_data)[summ$j],
+                         count = summ$x)
+
+input_cds <- make_atac_cds(summ_frame, binarize = F)
+meta <- FRPTC@meta.data
+meta$cells <- rownames(meta)
+metanames <- rownames(meta)
+meta <- merge(input_cds@colData,meta,by.x="cells", by.y="cells")
+rownames(meta) <- meta@listData[["cells"]]
+input_cds@colData <- meta
+input_cds <- detect_genes(input_cds)
+input_cds <- estimate_size_factors(input_cds)
+input_cds <- preprocess_cds(input_cds, method = "LSI")
+input_cds <- reduce_dimension(input_cds, reduction_method = 'UMAP', 
+                              preprocess_method = "LSI")
+umap_coords <- reducedDims(input_cds)$UMAP
+cicero_cds <- make_cicero_cds(input_cds, reduced_coordinates = umap_coords)
+
+contigs <- read.table("mm10.chrom.sizes.txt")
+contigs <- subset(contigs, V1 %in% "chr6")
+conns <- run_cicero(cicero_cds, contigs)
+
+gene_anno <- rtracklayer::readGFF("Mus_musculus.GRCm38.100.gtf")
+
+# rename some columns to match plotting requirements
+gene_anno$chromosome <- paste0("chr", gene_anno$seqid)
+gene_anno$gene <- gene_anno$gene_id
+gene_anno$transcript <- gene_anno$transcript_id
+gene_anno$symbol <- gene_anno$gene_name
+
+Fig7_Mouse_CCAN1 <- plot_connections(conns, "chr6",134990000,135090000,
+                                     gene_model = gene_anno,
+                                     viewpoint = "chr6-135040191-135040827",
+                                     coaccess_cutoff = .1, 
+                                     connection_width = .5, 
+                                     collapseTranscripts = "longest") # +/- 50Kbp; 1000x300
