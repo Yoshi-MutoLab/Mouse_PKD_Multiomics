@@ -242,6 +242,7 @@ distal_avg <- AverageExpression(PC3,assays = "GSEA")
 
 Fig2E <- pheatmap::pheatmap(distal_avg[["GSEA"]][mPC1_heatmap[["tree_row"]][["order"]],],scale = "row", cluster_cols = F,cluster_rows = F, )
 
+DefaultAssay(CNT_PC) <- "SCT"
 TargetPC <- subset(CNT_PC,idents = c("cPC2","mPC1"))
 TargetPC@meta.data[["subtype3"]] <- paste0(TargetPC@meta.data[["disease"]],"_",TargetPC@meta.data[["subtype2"]])
 Idents(TargetPC) <- "subtype3"
