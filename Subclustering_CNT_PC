@@ -78,4 +78,14 @@ CNT_PC@meta.data[["subtype2"]] <- CNT_PC@active.ident
 
 CNT_PC <- subset(CNT_PC,idents = "LowQC",invert=T) #Remove the remaining low-QC/doublet cells
 DefaultAssay(CNT_PC) <- "SCT"
+
+Idents(CNT_PC) <- "orig.ident"
+new.cluster.ids <- c("cont","cont","cont","pkd","pkd","pkd",
+                     "cont","cont","cont","pkd","pkd","pkd",
+                     "cont","cont","pkd","pkd")
+names(new.cluster.ids) <- levels(CNT_PC)
+CNT_PC <- RenameIdents(CNT_PC, new.cluster.ids)
+CNT_PC@meta.data[["disease2"]] <- CNT_PC@active.ident
+Idents(CNT_PC) <- "subtype2"
+
 #saveRDS(CNT_PC,"mPKD_CNT_PC.rds")
