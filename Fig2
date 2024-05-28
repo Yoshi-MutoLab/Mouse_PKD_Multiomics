@@ -223,6 +223,11 @@ CNT_PC[['GSEA']] <- CreateAssayObject(counts = t(sigScores))
 DefaultAssay(CNT_PC) <- "GSEA"
 CNT_PC <- ScaleData(CNT_PC)
 
+mPC1 <- subset(CNT_PC,idents = "mPC1")
+Idents(mPC1) <- "disease"
+distal_avg1 <- AverageExpression(mPC1,assays = "GSEA")
+mPC1_heatmap <- pheatmap::pheatmap(distal_avg1[["GSEA"]][,c(5,6,3,4,1,2)],scale = "row", cluster_cols = T,cluster_rows = T, ) #650x720
+
 DefaultAssay(CNT_PC) <- "GSEA"
 PC3 <- subset(CNT_PC,idents = c("cPC2","mPC1"))
 PC3@meta.data[["subtype2_disease"]] <- paste0(PC3@meta.data[["subtype2"]],"_",PC3@meta.data[["disease"]])
@@ -235,9 +240,7 @@ levels(PC3) <- c("cPC2_P66-cont","cPC2_P66-pkd",
                  "mPC1_P130-cont","mPC1_P130-pkd")
 distal_avg <- AverageExpression(PC3,assays = "GSEA")
 
-Fig2E <- pheatmap::pheatmap(distal_avg[["GSEA"]][Fig2F[["tree_row"]][["order"]],],scale = "row", cluster_cols = F,cluster_rows = F, ) #650x720
-#800x560
-
+Fig2E <- pheatmap::pheatmap(distal_avg[["GSEA"]][mPC1_heatmap[["tree_row"]][["order"]],],scale = "row", cluster_cols = F,cluster_rows = F, )
 
 TargetPC <- subset(CNT_PC,idents = c("cPC2","mPC1"))
 TargetPC@meta.data[["subtype3"]] <- paste0(TargetPC@meta.data[["disease"]],"_",TargetPC@meta.data[["subtype2"]])
