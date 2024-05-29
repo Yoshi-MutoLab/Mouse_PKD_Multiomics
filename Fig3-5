@@ -49,34 +49,41 @@ Annotation(PTC) <- annotations
 Fig3C_2<- CoveragePlot(PTC,"chr3-116127500-116132500",annotation = T,peaks = T) #300x400
 Fig3D_3<- CoveragePlot(PTC,"chr6-18168000-18173000",annotation = T,peaks = T) #300x400
 
-FRPTC_PECpercentage <- read.csv("FRPTC_percentage_freq.csv")
-#convert data frame from a "wide" format to a "long" format
-library(reshape2)
-lm = melt(FRPTC_PECpercentage, id = "disease")
-
-ggplotColours <- function(n = 6, h = c(0, 360) + 15){
-  if ((diff(h) %% 360) < 1) h[2] <- h[2] - 360/n
-  hcl(h = (seq(h[1], h[2], length = n)), c = 100, l = 65)
-}
-colours <- ggplotColours(n=4)
-colours <- colours[c(4,1,2,3)]
-
-library(ggplot2)
-Fig4B_1  <-  ggplot(lm, aes(x = disease, fill = variable, y = value)) + 
-  geom_bar(stat = "identity", colour = "black")  + 
-  scale_y_continuous(limits = c(0, 0.11),expand = c(0, 0)) +theme(
-    panel.background = element_rect(fill='transparent'))  + 
-  scale_fill_manual(values = colours) #500x450
-
-FRPTC <- subset(FRPTC_PEC,idents = c("Trans-PTC","FRPTC1","FRPTC2","FRPTC3"))
+#P66 vs P100 vs P130
+FRPTC <- subset(FRPTC_PEC,idents = c("FRPTC1","FRPTC2","FRPTC3"))
 Idents(FRPTC) <- "disease"
-FRPTC <- subset(FRPTC,idents = c("P66-cont","P66-pkd","P100-pkd","P130-pkd"))
-levels(FRPTC) <- c("P66-cont","P66-pkd","P100-pkd","P130-pkd")
-FRPTC@meta.data$disease <- FRPTC@active.ident
-Idents(FRPTC) <- "subtype"
-levels(FRPTC) <- levels(FRPTC)[c(3,4,1,2)]
-Fig4B_2 <- DimPlot(FRPTC, reduction = "umap.frwnn", split.by = "disease") + NoLegend()
-#350x650
+FRPTC <- subset(FRPTC,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+levels(FRPTC) <- c("P66-pkd","P100-pkd","P130-pkd")
+marker_FRPTC <- FindAllMarkers(FRPTC,only.pos = T)
+write.csv(marker_FRPTC,"~/PKD_mouse/fig3_final/marker_FRPTC.csv")
+
+FRPTC1 <- subset(FRPTC_PEC,idents = "FRPTC1")
+Idents(FRPTC1) <- "disease"
+FRPTC1 <- subset(FRPTC1,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+levels(FRPTC1) <- c("P66-pkd","P100-pkd","P130-pkd")
+
+features1 <- c("Slc25a5","Atp1a1","Gm42418","Kap",
+               "Cyb5a","Pkhd1","Cp","Spp1","Cftr","Rhobtb1")
+
+levels(FRPTC1) <- rev(levels(FRPTC1))
+Fig3G_1 <- DotPlot(FRPTC1, features = features1, cols = c("lightyellow","royalblue")) +
+  RotatedAxis() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #640x360
+levels(FRPTC1) <- rev(levels(FRPTC1))
+
+FRPTC2 <- subset(FRPTC_PEC,idents = "FRPTC2")
+Idents(FRPTC2) <- "disease"
+FRPTC2 <- subset(FRPTC2,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+levels(FRPTC2) <- c("P66-pkd","P100-pkd","P130-pkd")
+
+features2 <- c("Slc4a4","Igf1","S100g","Rbms3","Efemp1","Spp1","Erbb4","Cftr","Dcdc2a")
+
+levels(FRPTC2) <- rev(levels(FRPTC2))
+Fig3G_2 <- DotPlot(FRPTC2, features = features2, cols = c("lightyellow","royalblue")) +
+  RotatedAxis() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #620x360
+levels(FRPTC2) <- rev(levels(FRPTC2))
+
 
 #Label transfer / Subtype prediction
 library(biomaRt)
@@ -159,40 +166,35 @@ colnames(test) <- c("PT1","PT2","PT3","PT4")
 #test <-test[c(4,1,2,3),]
 Fig4A <- pheatmap::pheatmap(test,scale = "column",cluster_rows = F,cluster_cols = F,border_color = "black") #420x280
 
-#P66 vs P100 vs P130
-FRPTC <- subset(FRPTC_PEC,idents = c("FRPTC1","FRPTC2","FRPTC3"))
+FRPTC_PECpercentage <- read.csv("FRPTC_percentage_freq.csv")
+#convert data frame from a "wide" format to a "long" format
+library(reshape2)
+lm = melt(FRPTC_PECpercentage, id = "disease")
+
+ggplotColours <- function(n = 6, h = c(0, 360) + 15){
+  if ((diff(h) %% 360) < 1) h[2] <- h[2] - 360/n
+  hcl(h = (seq(h[1], h[2], length = n)), c = 100, l = 65)
+}
+colours <- ggplotColours(n=4)
+colours <- colours[c(4,1,2,3)]
+
+library(ggplot2)
+Fig4B_1  <-  ggplot(lm, aes(x = disease, fill = variable, y = value)) + 
+  geom_bar(stat = "identity", colour = "black")  + 
+  scale_y_continuous(limits = c(0, 0.11),expand = c(0, 0)) +theme(
+    panel.background = element_rect(fill='transparent'))  + 
+  scale_fill_manual(values = colours) #500x450
+
+FRPTC <- subset(FRPTC_PEC,idents = c("Trans-PTC","FRPTC1","FRPTC2","FRPTC3"))
 Idents(FRPTC) <- "disease"
-FRPTC <- subset(FRPTC,idents = c("P66-pkd","P100-pkd","P130-pkd"))
-levels(FRPTC) <- c("P66-pkd","P100-pkd","P130-pkd")
-marker_FRPTC <- FindAllMarkers(FRPTC,only.pos = T)
-write.csv(marker_FRPTC,"~/PKD_mouse/fig3_final/marker_FRPTC.csv")
+FRPTC <- subset(FRPTC,idents = c("P66-cont","P66-pkd","P100-pkd","P130-pkd"))
+levels(FRPTC) <- c("P66-cont","P66-pkd","P100-pkd","P130-pkd")
+FRPTC@meta.data$disease <- FRPTC@active.ident
+Idents(FRPTC) <- "subtype"
+levels(FRPTC) <- levels(FRPTC)[c(3,4,1,2)]
+Fig4B_2 <- DimPlot(FRPTC, reduction = "umap.frwnn", split.by = "disease") + NoLegend()
+#350x650
 
-FRPTC1 <- subset(FRPTC_PEC,idents = "FRPTC1")
-Idents(FRPTC1) <- "disease"
-FRPTC1 <- subset(FRPTC1,idents = c("P66-pkd","P100-pkd","P130-pkd"))
-levels(FRPTC1) <- c("P66-pkd","P100-pkd","P130-pkd")
-
-features1 <- c("Slc25a5","Atp1a1","Gm42418","Kap",
-               "Cyb5a","Pkhd1","Cp","Spp1","Cftr","Rhobtb1")
-
-levels(FRPTC1) <- rev(levels(FRPTC1))
-Fig3G_1 <- DotPlot(FRPTC1, features = features1, cols = c("lightyellow","royalblue")) +
-  RotatedAxis() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #640x360
-levels(FRPTC1) <- rev(levels(FRPTC1))
-
-FRPTC2 <- subset(FRPTC_PEC,idents = "FRPTC2")
-Idents(FRPTC2) <- "disease"
-FRPTC2 <- subset(FRPTC2,idents = c("P66-pkd","P100-pkd","P130-pkd"))
-levels(FRPTC2) <- c("P66-pkd","P100-pkd","P130-pkd")
-
-features2 <- c("Slc4a4","Igf1","S100g","Rbms3","Efemp1","Spp1","Erbb4","Cftr","Dcdc2a")
-
-levels(FRPTC2) <- rev(levels(FRPTC2))
-Fig3G_2 <- DotPlot(FRPTC2, features = features2, cols = c("lightyellow","royalblue")) +
-  RotatedAxis() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #620x360
-levels(FRPTC2) <- rev(levels(FRPTC2))
 
 #trajectory
 
