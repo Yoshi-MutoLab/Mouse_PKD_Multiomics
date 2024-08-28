@@ -1,0 +1,46 @@
+library(Seurat)
+library(Signac)
+library(ggplot2)
+set.seed(1234)
+
+#CNT_PC subclustering from Fig2
+CNT3 <- subset(CNT_PC,idents = "CNT3")
+
+#SCT Assat
+CNT3 <- SCTransform(CNT3, vars.to.regress = c("percent.mt", "nCount_RNA","S.Score", "G2M.Score"))
+CNT3 <- RunPCA(CNT3)
+CNT3 <- RunUMAP(CNT3, reduction = "pca", dims = 1:20, reduction.name = 'umap.CNT3')
+CNT3 <- FindNeighbors(object = CNT3, reduction = "pca", dims = 2:20)
+CNT3 <- FindClusters(object = CNT3, verbose = FALSE, algorithm = 3,resolution = 0.1)
+DimPlot(CNT3,reduction = 'umap.CNT3',label = T)
+
+#ATAC-seq
+DefaultAssay(CNT3) <- "peaks"
+CNT3 <- RunTFIDF(CNT3)
+CNT3 <- FindTopFeatures(CNT3, min.cutoff = 'q0')
+CNT3 <- RunSVD(CNT3)
+CNT3 <- RunUMAP(CNT3, reduction = 'lsi', dims = 2:20, reduction.name = "umap.PCatac")
+CNT3 <- FindNeighbors(object = CNT3, reduction = "lsi", dims = 2:20)
+CNT3 <- FindClusters(object = CNT3, verbose = FALSE, algorithm = 3,resolution = 0.1)
+DimPlot(CNT3,reduction = 'umap.PCatac',label = T)
+
+CNT3 <- FindMultiModalNeighbors(CNT3, reduction.list = list("pca", "lsi"), 
+                                dims.list = list(1:20, 2:20)
+)
+CNT3 <- RunUMAP(CNT3, nn.name = "weighted.nn", reduction.name = "umap.PCwnn2", reduction.key = "wnnUMAP_")
+CNT3 <- FindClusters(CNT3, graph.name = "wsnn", algorithm = 3, verbose = FALSE,resolution = 0.1)
+FigS10B <- DimPlot(CNT3, reduction = "umap.PCwnn2", label.size = 2.5,cols = colours) #500x450
+
+DefaultAssay(CNT3) <- "SCT"
+Idents(CNT3) <- "seurat_clusters"
+new.cluster.ids <- c("CNT3_Norm","CNT3_Pkd")
+names(new.cluster.ids) <- levels(CNT3)
+CNT3 <- RenameIdents(CNT3, new.cluster.ids)
+CNT3@meta.data[["subtype3"]] <- CNT3@active.ident
+
+features <- c("Ptprd","Slc8a1","Calb1","Malrd1","Egfem1","Dcdc2a","Creb5","Lcn2","Havcr1","Vcam1","Mgat4c","Spock3","Scel",
+              "Aqp2","Pde1a","Pcdh7","Slc14a2","Slc12a2","Spp1")
+levels(CNT_PC) <- rev(levels(CNT_PC))
+FigS10D <- DotPlot(CNT_PC, features = features, cols = c("lightyellow","royalblue")) +
+  RotatedAxis() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #900x450
