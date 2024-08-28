@@ -1,0 +1,31 @@
+library(Seurat)
+library(Signac)
+library(ggplot2)
+library(VISION)
+set.seed(1234)
+
+#human ADPKD PTC subclustering (Nat. Commun. 2022 Oct 30;13(1):6497)
+hPTC <- readRDS("hPTC.rds")
+features <- c("CDH6","VCAM1","SPP1","RBMS3","HAVCR1")
+
+levels(hPTC) <- rev(levels(hPTC))
+FigS19B <- DotPlot(hPTC, features = features) +
+  RotatedAxis() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #600x420
+levels(hPTC) <- rev(levels(hPTC))
+
+#VISION
+signatures <- "c2.cp.reactome.v2022.1.Hs_hippo2.gmt"
+vision.obj <- Vision(hPTC, signatures = signatures)
+vision.obj <- analyze(vision.obj)
+
+sigScores <- getSignatureScores(vision.obj)
+sigScores <- as.data.frame(sigScores)
+
+hPTC[['GSEA']] <- CreateAssayObject(counts = t(sigScores))
+DefaultAssay(hPTC) <- "GSEA"
+hPTC <- ScaleData(hPTC)
+aver_GSEA <- AverageExpression(hPTC, assays = "GSEA")
+mat <- aver_GSEA[["GSEA"]]
+FigS19C <- pheatmap::pheatmap(mat,scale = "row",cluster_cols=F,cluster_rows = F)
+FigS19D <- VlnPlot(hPTC,"REACTOME-SIGNALING-BY-HIPPO",pt.size = 0)+NoLegend()
