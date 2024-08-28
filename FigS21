@@ -1,0 +1,26 @@
+library(Seurat)
+library(Signac)
+set.seed(1234)
+
+#IRI_PT: PTC subluctering in Proc. Natl. Acad. Sci. U. S. A. 2020 Jul 7;117(27):15874-15883.
+IRI_FRPTC <- subset(IRI_PT,idents = "Failed_repair_PT")
+
+#Mouse PKD FRPTC
+FRPTC <- subset(FRPTC_PEC,idents = c("Trans-PTC","PEC"),invert=T)
+Idents(FRPTC) <- "disease"
+FRPTC <- subset(FRPTC,idents = c("P66-pkd","P100-pkd","P130-pkd"))
+
+IRI_FRPTC <- SCTransform(IRI_FRPTC, vars.to.regress = c("percent.mito", "nCount_RNA","S.Score", "G2M.Score"))
+IRI_FRPTC <- RunPCA(IRI_FRPTC)
+
+PT.anchors <- FindTransferAnchors(
+  reference = FRPTC, query = IRI_FRPTC, dims = 1:30,reduction = "cca",
+  reference.assay = 'SCT',
+  query.assay = 'SCT')
+
+predictions <- TransferData(anchorset = PT.anchors, refdata = FRPTC$subtype, dims = 1:30,
+                            weight.reduction = "cca")
+
+IRI_FRPTC <- AddMetaData(IRI_FRPTC,predictions)
+Idents(IRI_FRPTC) <- "predicted.id"
+FigS19A <- VlnPlot(IRI_FRPTC,"Cdh6")
