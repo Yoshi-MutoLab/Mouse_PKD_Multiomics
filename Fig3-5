@@ -38,8 +38,8 @@ levels(PTC) <- rev(levels(PTC))
 
 Fig3C_1 <- FeaturePlot(FRPTC_PEC,"Vcam1",reduction = "umap.frwnn") #450x400
 
-Fig3D_1 <- FeaturePlot(FRPTC_PEC,"Cftr",reduction = "umap.frwnn") #450x400
-Fig3D_2 <- FeaturePlot(PKDaggr,"Cftr",reduction = "umap.wnn")
+FigS16_1 <- FeaturePlot(FRPTC_PEC,"Cftr",reduction = "umap.frwnn") #450x400
+FigS16_2 <- FeaturePlot(PKDaggr,"Cftr",reduction = "umap.wnn")
 
 DefaultAssay(PTC) <-"peaks"
 annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
@@ -47,7 +47,7 @@ seqlevelsStyle(annotations) <- 'UCSC'
 genome(annotations) <- "mm10"
 Annotation(PTC) <- annotations
 Fig3C_2<- CoveragePlot(PTC,"chr3-116127500-116132500",annotation = T,peaks = T) #300x400
-Fig3D_3<- CoveragePlot(PTC,"chr6-18168000-18173000",annotation = T,peaks = T) #300x400
+FigS16_3<- CoveragePlot(PTC,"chr6-18168000-18173000",annotation = T,peaks = T) #300x400
 
 #P66 vs P100 vs P130
 FRPTC <- subset(FRPTC_PEC,idents = c("FRPTC1","FRPTC2","FRPTC3"))
